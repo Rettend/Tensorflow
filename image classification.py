@@ -18,7 +18,8 @@ fashion_mnist = tf.keras.datasets.fashion_mnist
 # Testing set: 10k images for verifying the network
 # Images: 28x28 NumPy arrays, pixel values from 0 to 255
 # Labels: integers from 0 to 9, corresponding to the class of the images
-(train_images, train_labels), (test_images, test_labels) = fashion_mnist.load_data()
+(train_images, train_labels), (test_images,
+                               test_labels) = fashion_mnist.load_data()
 
 # Name the 10 image classes
 class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
@@ -56,7 +57,8 @@ model = tf.keras.Sequential([
 
 # Compile
 model.compile(optimizer='adam',
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True),
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(
+                  from_logits=True),
               metrics=['accuracy'])
 
 # Train the model
