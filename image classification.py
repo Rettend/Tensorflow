@@ -1,3 +1,4 @@
+# Task: classify images
 # https://www.tensorflow.org/tutorials/keras/classification
 
 # https://www.tensorflow.org/tutorials/keras/classification#make_predictions
