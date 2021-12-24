@@ -87,11 +87,82 @@ def vectorize_text(text, label):
 # retrieve a batch (of 32 reviews and labels) from the dataset
 text_batch, label_batch = next(iter(raw_train_ds))
 first_review, first_label = text_batch[0], label_batch[0]
-print("Review", first_review)
-print("Label", raw_train_ds.class_names[first_label])
-print("Vectorized review", vectorize_text(first_review, first_label))
 
 # Apply TextVectorization to datasets
 train_ds = raw_train_ds.map(vectorize_text)
 val_ds = raw_val_ds.map(vectorize_text)
 test_ds = raw_test_ds.map(vectorize_text)
+
+# Cache and Prefetch for performance improvement
+AUTOTUNE = tf.data.AUTOTUNE
+train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
+val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
+test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
+
+# Creat Model
+# 16 hidden units
+embedding_dim = 16
+model = tf.keras.Sequential([
+    # The Embedding layer takes the integer-encoded reviews and looks up
+    # an embedding vector for each word-index
+    layers.Embedding(max_features + 1, embedding_dim),
+    layers.Dropout(0.2),
+    # The GlobalAveragePooling1D layer returns a fixed-length output
+    # vector for each example by averaging over the sequence dimension
+    layers.GlobalAveragePooling1D(),
+    layers.Dropout(0.2),
+    # Densely connected layer with a single output node
+    layers.Dense(1)])
+model.summary()
+
+# Loss function and optimizer
+# Adam we do
+# losses.BinaryCeossentropy is used for binary classification which
+# outputs a probability (a single-unit layer with a sigmoid activation)
+model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
+              optimizer='adam',
+              metrics=tf.metrics.BinaryAccuracy(threshold=0.0))
+
+# Training the Model
+epochs = 10
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=epochs)
+
+# Evaluation
+loss, accuracy = model.evaluate(test_ds)
+print("Loss: ", loss)
+print("Accuracy: ", accuracy)
+
+# New export model
+export_model = tf.keras.Sequential([
+  vectorize_layer,
+  model,
+  layers.Activation('sigmoid')
+])
+
+export_model.compile(
+    loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
+)
+
+# Test it with `raw_test_ds`, which yields raw strings
+loss, accuracy = export_model.evaluate(raw_test_ds)
+print(accuracy)
+
+# Test on new data
+examples = [
+  "Haven't watched a better movie in my life.",
+  "Normally, I would just say it was bad, but this is below everything.",
+  "Oh the misery, everybody wants to be my enemy, spare the sympathy, everybody wants to be my enemy"
+]
+
+print(export_model.predict(examples))
+
+
+# Save the entire model as a SavedModel.
+# Access with: model = tf.keras.models.load_model('saved_models/text classification')
+#export_model.save('saved_models/text classification')
+
+# HDF5 Saving method
+model.save('text_classification.h5')
