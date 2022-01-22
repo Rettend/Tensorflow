@@ -1,4 +1,6 @@
-import os, re, string
+import os
+import re
+import string
 
 import tensorflow as tf
 from tensorflow import keras
@@ -7,7 +9,8 @@ from tensorflow.keras import losses
 
 # model = tf.keras.models.load_model('saved_models/text classification')
 
-model = tf.keras.models.load_model('Basic_Text_Classification\text_classification.h5')
+model = tf.keras.models.load_model(
+    'Basic_Text_Classification\text_classification.h5')
 
 # Sets
 batch_size = 32

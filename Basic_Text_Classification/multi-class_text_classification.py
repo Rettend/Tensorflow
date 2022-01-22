@@ -21,5 +21,4 @@ dataset = tf.keras.utils.get_file("Basic_Text_Classification/stack_overflow_16k.
 dataset_dir = os.path.join(os.path.dirname(dataset), 'stack_overflow_16k')
 
 
-
 os.listdir(dataset_dir)

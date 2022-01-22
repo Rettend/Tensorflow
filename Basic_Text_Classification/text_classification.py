@@ -1,6 +1,9 @@
 # Task: determine whether the reviews are positive or negative
+# Binary classification
 # https://www.tensorflow.org/tutorials/keras/text_classification
 
+from tensorflow.keras import losses
+from tensorflow.keras import layers
 import matplotlib.pyplot as plt
 import os
 import re
@@ -9,66 +12,100 @@ import string
 import tensorflow as tf
 # Test GPU, this should return 1
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-from tensorflow.keras import layers
-from tensorflow.keras import losses
+
+relative_path = "Tensorflow/Basic_Text_Classification/"
 
 # Movie reviews dataset
-# Balanced sets: 25k for training and testing
+# Balanced sets: 25k for training and 25k for testing
 url = "https://ai.stanford.edu/~amaas/data/sentiment/aclImdb_v1.tar.gz"
-dataset = tf.keras.utils.get_file("Basic_Text_Classification/aclImdb_v1.tar.gz", url,
-                                  untar=True, cache_dir='.',
+dataset = tf.keras.utils.get_file("aclImdb_v1.tar.gz", url,
+                                  untar=True, cache_dir=relative_path + '.',
                                   cache_subdir='')
 
 # Dataset folder
 dataset_dir = os.path.join(os.path.dirname(dataset), 'aclImdb')
+# Content: ['README', 'train', 'imdb.vocab', 'imdbEr.txt', 'test']
+os.listdir(dataset_dir)
 
 # Train folder
 train_dir = os.path.join(dataset_dir, 'train')
+# Content: ['unsupBow.feat', 'unsup', 'neg', 'pos', 'urls_pos.txt', 'urls_neg.txt', 'urls_unsup.txt', 'labeledBow.feat']
+# The aclImdb/train/pos and aclImdb/train/neg directories contain the positive and negative text files
+os.listdir(train_dir)
+
+# # Print one file:
+# sample_file = os.path.join(train_dir, 'pos/1181_9.txt')
+# with open(sample_file) as f:
+#   print(f.read())
 
 # Remove additional folders
 remove_dir = os.path.join(train_dir, 'unsup')
 shutil.rmtree(remove_dir)
 
-# Sets
-batch_size = 32
-seed = 42
-# Traing
+
+# Divide the dataset into 3 splits: Train, Validation, Test
+# And load the dataset with tf.keras.utils.text_dataset_from_directory which creates a tf.data.Dataset
+# from text files in a directory. It expects the following structure:
+# main_directory/
+# ...class_a/
+# ......a_text_1.txt
+# ......a_text_2.txt
+# ...class_b/
+# ......b_text_1.txt
+# ......b_text_2.txt
+
+# Create train set
+validation_split = 0.2  # fraction of data to reserve for validation: 20k for training
+batch_size = 32  # default
+seed = 42  # random seed for shuffling data
 raw_train_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/train',
+    relative_path + 'aclImdb/train',
     batch_size=batch_size,
-    validation_split=0.2,
+    validation_split=validation_split,
     subset='training',
     seed=seed)
-# Validation
-# Create validation set using 80:20 split from training
+
+# # Print some examples, raw text with HTMK <br/> tags, reviews are labeled 0 (pos) or 1 (neg)
+# for text_batch, label_batch in raw_train_ds.take(1):
+#   for i in range(3):
+#     print("Review", text_batch.numpy()[i])
+#     print("Label", label_batch.numpy()[i])
+
+# # Check the class_names for the reviews
+# print("Label 0 corresponds to", raw_train_ds.class_names[0])
+# print("Label 1 corresponds to", raw_train_ds.class_names[1])
+
+# Create validation set
 raw_val_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/train',
+    relative_path + 'aclImdb/train',
     batch_size=batch_size,
     validation_split=0.2,
     subset='validation',
     seed=seed)
-# Test
+
+# Create test set
 raw_test_ds = tf.keras.utils.text_dataset_from_directory(
-    'aclImdb/test',
+    relative_path + 'aclImdb/test',
     batch_size=batch_size)
 
-# Preprocessing: prepare dataset for testing
 
-
+# Prepare the dataset for training with tf.keras.layers.TextVectorization
+# Standardization: preprocessing the text, like removing punctuations and HTML elements, and converting to lower case
+# Tokenization: splitting strings into tokens (like splitting sentences to words)
+# Vectorization: converting tokens into numbers for the neural network, it can be done inside or outside the model
+# using it outside lets it to be run on GPU, while using it inside enables the model to be exported and prevents train/test skew
 def custom_standardization(input_data):
-    # Lowercase data
-    lowercase = tf.strings.lower(input_data)
-    # Remove HTML linebreak tags
-    stripped_html = tf.strings.regex_replace(lowercase, '<br />', ' ')
+    lowercase = tf.strings.lower(input_data)  # lowercase strings
+    stripped_html = tf.strings.regex_replace(
+        lowercase, '<br />', ' ')  # remove HTML
     return tf.strings.regex_replace(stripped_html,
                                     '[%s]' % re.escape(string.punctuation),
                                     '')
 
 
-# TextVertorization: text to numbers
+# Create layer
 max_features = 10000
 sequence_length = 250
-
 vectorize_layer = layers.TextVectorization(
     standardize=custom_standardization,
     max_tokens=max_features,
@@ -79,134 +116,50 @@ vectorize_layer = layers.TextVectorization(
 train_text = raw_train_ds.map(lambda x, y: x)
 vectorize_layer.adapt(train_text)
 
+# Function to see the results
+
 
 def vectorize_text(text, label):
     text = tf.expand_dims(text, -1)
     return vectorize_layer(text), label
 
 
-# retrieve a batch (of 32 reviews and labels) from the dataset
-text_batch, label_batch = next(iter(raw_train_ds))
-first_review, first_label = text_batch[0], label_batch[0]
+# # retrieve a batch (of 32 reviews and labels) from the dataset
+# text_batch, label_batch = next(iter(raw_train_ds))
+# first_review, first_label = text_batch[0], label_batch[0]
+# print("Review", first_review)
+# print("Label", raw_train_ds.class_names[first_label])
+# print("Vectorized review", vectorize_text(first_review, first_label))
 
-# Apply TextVectorization to datasets
+# # Lookup specific integers and what they correspond to
+# print("1287 ---> ",vectorize_layer.get_vocabulary()[1287])
+# print(" 313 ---> ",vectorize_layer.get_vocabulary()[313])
+# print("   3 ---> ",vectorize_layer.get_vocabulary()[3])
+# print("   2 ---> ",vectorize_layer.get_vocabulary()[2])
+# print("   1 ---> ",vectorize_layer.get_vocabulary()[1]) # space?
+# print('Vocabulary size: {}'.format(len(vectorize_layer.get_vocabulary())))
+
+# Apply the TextVectorization layer to the sets
 train_ds = raw_train_ds.map(vectorize_text)
 val_ds = raw_val_ds.map(vectorize_text)
 test_ds = raw_test_ds.map(vectorize_text)
 
-# Cache and Prefetch for performance improvement
+# Configure the dataset for performance
+# .cache() keeps the data in memory after it's loaded off disk
+# .prefetch() overlaps data preprocessing and model execution while training
 AUTOTUNE = tf.data.AUTOTUNE
 train_ds = train_ds.cache().prefetch(buffer_size=AUTOTUNE)
 val_ds = val_ds.cache().prefetch(buffer_size=AUTOTUNE)
 test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 
-# Creat Model
-# 16 hidden units
+
+# Create the model
 embedding_dim = 16
-
-# To prevent Overfitting, this callback will stop the training when there is no improvement in
-# the loss for three consecutive epochs.
-callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
-
 model = tf.keras.Sequential([
-    # The Embedding layer takes the integer-encoded reviews and looks up
-    # an embedding vector for each word-index
-    layers.Embedding(max_features + 1, embedding_dim),
-    layers.Dropout(0.2),
-    # The GlobalAveragePooling1D layer returns a fixed-length output
-    # vector for each example by averaging over the sequence dimension
-    layers.GlobalAveragePooling1D(),
-    layers.Dropout(0.2),
-    # Densely connected layer with a single output node
-    layers.Dense(1)])
+  layers.Embedding(max_features + 1, embedding_dim), # 
+  layers.Dropout(0.2),
+  layers.GlobalAveragePooling1D(),
+  layers.Dropout(0.2),
+  layers.Dense(1)])
+
 model.summary()
-
-# Loss function and optimizer
-# Adam we do
-# losses.BinaryCeossetropy is used for binary classification which
-# outputs a probability (a single-unit layer with a sigmoid activation)
-model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
-              optimizer='adam',
-              metrics=tf.metrics.BinaryAccuracy(threshold=0.0))
-
-# Training the Model
-epochs = 10
-history = model.fit(
-    train_ds,
-    validation_data=val_ds,
-    epochs=epochs,
-    callbacks=[callback])
-
-# Evaluation
-loss, accuracy = model.evaluate(test_ds)
-print("Loss: ", loss)
-print("Accuracy: ", accuracy)
-
-# New export model
-export_model = tf.keras.Sequential([
-  vectorize_layer,
-  model,
-  layers.Activation('sigmoid')
-])
-
-export_model.compile(
-    loss=losses.BinaryCrossentropy(from_logits=False), optimizer="adam", metrics=['accuracy']
-)
-
-# Test it with `raw_test_ds`, which yields raw strings
-loss, accuracy = export_model.evaluate(raw_test_ds)
-print(accuracy)
-
-# Test on new data
-examples = [
-  "Haven't watched a better movie in my life.",
-  "Normally, I would just say it was bad, but this is below everything.",
-  "Oh the misery, everybody wants to be my enemy, spare the sympathy, everybody wants to be my enemy"
-]
-
-print(export_model.predict(examples))
-
-# Evaluation
-loss, accuracy = model.evaluate(test_ds)
-print("Loss: ", loss)
-print("Accuracy: ", accuracy)
-
-# Plot the accuracy and loss over time
-history_dict = history.history
-
-# 4 entries monitored:
-# dict_keys(['loss', 'binary_accuracy', 'val_loss', 'val_binary_accuracy'])
-history_dict.keys()
-
-acc = history_dict['binary_accuracy']
-val_acc = history_dict['val_binary_accuracy']
-loss = history_dict['loss']
-val_loss = history_dict['val_loss']
-
-epochs = range(1, len(acc) + 1)
-
-# "bo" is for "blue dot"
-plt.plot(epochs, loss, 'bo', label='Training loss')
-# b is for "solid blue line"
-plt.plot(epochs, val_loss, 'b', label='Validation loss')
-plt.title('Training and validation loss')
-plt.xlabel('Epochs')
-plt.ylabel('Loss')
-plt.legend()
-plt.show()
-
-plt.plot(epochs, acc, 'bo', label='Training acc')
-plt.plot(epochs, val_acc, 'b', label='Validation acc')
-plt.title('Training and validation accuracy')
-plt.xlabel('Epochs')
-plt.ylabel('Accuracy')
-plt.legend(loc='lower right')
-plt.show()
-
-
-# Save the entire model as a SavedModel.
-# Access with: model = tf.keras.models.load_model('saved_models/text classification')
-#export_model.save('saved_models/text classification')
-
-# HDF5 Saving method
-model.save('Basic_Text_Classification/text_classification.h5')
