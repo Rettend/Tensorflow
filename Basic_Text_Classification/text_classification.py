@@ -1,6 +1,7 @@
 # Task: determine whether the reviews are positive or negative
 # Binary classification
 # https://www.tensorflow.org/tutorials/keras/text_classification
+# https://www.tensorflow.org/text/guide/word_embeddings
 
 from tensorflow.keras import losses
 from tensorflow.keras import layers
@@ -156,10 +157,60 @@ test_ds = test_ds.cache().prefetch(buffer_size=AUTOTUNE)
 # Create the model
 embedding_dim = 16
 model = tf.keras.Sequential([
-  layers.Embedding(max_features + 1, embedding_dim), # 
-  layers.Dropout(0.2),
-  layers.GlobalAveragePooling1D(),
-  layers.Dropout(0.2),
-  layers.Dense(1)])
+    # Takes the integer-encoded reviews and looks up an embedding vector for each word-index
+    layers.Embedding(max_features + 1, embedding_dim),  # 16 output nodes
+    layers.Dropout(0.2),  # Randomly sets inputs to 0, reduce overfitting
+    layers.GlobalAveragePooling1D(),  # Average pooling for data
+    # 0.2 is the rate at which the random selection happens
+    layers.Dropout(0.2),
+    layers.Dense(1)])  # densely connected single output layer with 16 hidden units
 
 model.summary()
+
+# Loss function and optimizer
+# BinaryCrossentropy is used for binary classification where the output is a probability
+model.compile(loss=losses.BinaryCrossentropy(from_logits=True),
+              optimizer='adam',
+              metrics=tf.metrics.BinaryAccuracy(threshold=0.0))
+
+# Train the model
+epochs = 10
+history = model.fit(
+    train_ds,
+    validation_data=val_ds,
+    epochs=epochs)
+
+# Evaluation
+loss, accuracy = model.evaluate(test_ds)
+print("Loss: ", loss)
+print("Accuracy: ", accuracy)
+
+# Plot the accuracy and loss over time
+history_dict = history.history
+# ['loss', 'binary_accuracy', 'val_loss', 'val_binary_accuracy']
+# history_dict.keys()
+
+acc = history_dict['binary_accuracy']
+val_acc = history_dict['val_binary_accuracy']
+loss = history_dict['loss']
+val_loss = history_dict['val_loss']
+
+epochs = range(1, len(acc) + 1)
+plt.plot(epochs, loss, 'b', label='Training loss')
+plt.plot(epochs, val_loss, 'c', label='Validition loss')
+plt.title('Training and validition loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+
+plt.plot(epochs, acc, 'b', label='Training acc')
+plt.plot(epochs, val_acc, 'c', label='Validation acc')
+plt.title('Training and validition accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend(loc='lower right')
+
+plt.show()
+# !Danger Overfitting!
+
+# Export the model
