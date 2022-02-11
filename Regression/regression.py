@@ -2,6 +2,7 @@
 # Task: predict the fuel efficiency (MPG: miles per gallon) of the late-1970s and early 1980s automobiles
 # https://www.tensorflow.org/tutorials/keras/regression
 
+from pickletools import optimize
 from tensorflow.keras import layers
 from tensorflow import keras
 import tensorflow as tf
@@ -112,7 +113,7 @@ def plot_loss(history):
     plt.show()
 
 
-plot_loss(history)
+# plot_loss(history)
 
 # Store test set
 test_results = {}
@@ -132,5 +133,79 @@ def plot_horsepower(x, y):
     plt.legend()
     plt.show()
 
+plot_horsepower(x, y)
 
+# Linear regression with multiple inputs
+# y = mx + b
+# m is a matrix and b is a vector
+# new model with the same normalizer
+linear_model = tf.keras.Sequential([
+    normalizer,
+    layers.Dense(units=1)
+])
+
+# # Calling Model.predict will produce outputs with units=1
+# linear_model.predict(train_features[:10]) # take first 10 as inputs
+# # array([[ 0.324], [-0.46 ], [-1.102], [ 0.466], [ 1.012], [-1.399], [ 0.817], [-0.906], [-1.116], [ 0.648]], dtype=float32)
+
+# # Look at the weigths with kernel, shape: (9, 1)
+# linear_model.layers[1].kernel
+# # <tf.Variable 'dense_1/kernel:0' shape=(9, 1) dtype=float32, numpy=array([[-0.148], [-0.714], [ 0.694], [-0.349], [-0.679], [ 0.235], [ 0.448], [ 0.546], [ 0.006]], dtype=float32)>
+
+# Configure the model
+linear_model.compile(
+    optimizer=tf.optimizers.Adam(learning_rate=0.1),
+    loss='mean_absolute_error')
+
+# Train for 100 epochs
+history = linear_model.fit(
+    train_features,
+    train_labels,
+    epochs=100,
+    # Suppress logging.
+    verbose=0,
+    # Calculate validation results on 20% of the training data.
+    validation_split = 0.2)
+
+# plot_loss(history)
+
+# Collect the results on the test set for later
+test_results['linear_model'] = linear_model.evaluate(
+    test_features, test_labels, verbose=0)
+
+# Regression with a Deep Neural Network (DNN)
+# additionally contains hidden non-linear layers with ReLU activation
+# Two models: single-input and multiple-input
+# For this the compile method will be the same so we use a function (normalizers differ)
+def build_and_compile_model(norm):
+    model = keras.Sequential([
+        norm,
+        layers.Dense(64, activation='relu'),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(1)
+    ])
+
+    model.compile(
+        loss='mean_absolute_error',
+        optimizer=tf.keras.optimizers.Adam(0.001))
+    
+    return model
+
+# Single-input DNN
+# takes 'Horsepower' as the only input and horsepower_normalizer layer
+dnn_horsepower_model = build_and_compile_model(horsepower_normalizer)
+dnn_horsepower_model.summary()
+
+# Train
+history = dnn_horsepower_model.fit(
+    train_features['Horsepower'],
+    train_labels,
+    validation_split=0.2,
+    verbose=0, epochs=100
+)
+
+# plot_loss(history)
+
+x = tf.linspace(0.0, 250, 251)
+y = dnn_horsepower_model.predict(x)
 plot_horsepower(x, y)
